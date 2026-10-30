@@ -1,0 +1,9 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.xin.armydock'
+    compileSdk 35
+    defaultConfig { applicationId 'com.xin.armydock'; minSdk 26; targetSdk 35; versionCode 47; versionName '1.46' }
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
