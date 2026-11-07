@@ -246,6 +246,12 @@ public class MainActivity extends Activity {
         addMenuRow(panel,"Thông tin launcher",()->{dialog.dismiss();showLauncherInfo();});
         dialog.setContentView(panel);configureDialog(dialog,dp(390));dialog.show();configureDialog(dialog,dp(390));alignLauncherSettingsDialog(dialog);if(panel.getChildCount()>1)panel.getChildAt(1).requestFocus();
     }
+    private void requestHomeRole(){
+        if(Build.VERSION.SDK_INT>=29){
+            try{android.app.role.RoleManager roles=getSystemService(android.app.role.RoleManager.class);if(roles!=null&&roles.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)){if(roles.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)){toast("Army Launcher đã là màn hình chính mặc định");return;}startActivityForResult(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME),74);return;}}catch(Exception ignored){}
+        }
+        try{startActivityForResult(new Intent(android.provider.Settings.ACTION_HOME_SETTINGS),74);}catch(Exception e){toast("Mở Cài đặt > Ứng dụng mặc định > Màn hình chính rồi chọn Army Launcher");}
+    }
     private void alignLauncherSettingsDialog(Dialog dialog){Window window=dialog.getWindow();if(window==null)return;WindowManager.LayoutParams params=window.getAttributes();params.gravity=Gravity.TOP|Gravity.RIGHT;params.x=dp(58);params.y=dp(28);window.setAttributes(params);}
     private void restoreDefaults(Dialog dialog){
         android.content.SharedPreferences prefs=getSharedPreferences(PREF,0);String oldWallpaper=prefs.getString("wallpaper_uri",null);
@@ -264,6 +270,7 @@ public class MainActivity extends Activity {
     private void showDisplaySettings(){
         Dialog dialog=new Dialog(this);LinearLayout panel=menuPanel();TextView title=text("Cài đặt hiển thị",18,LIGHT,true);title.setGravity(Gravity.CENTER);panel.addView(title,new LinearLayout.LayoutParams(-1,dp(44)));
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.VERTICAL);scroll.addView(controls);panel.addView(scroll,new LinearLayout.LayoutParams(-1,dp(420)));
+        addMenuRowLeft(controls,"⌂  Chọn Launcher Mặc Định",()->requestHomeRole());
         addMenuRowLeft(controls,"▧  Đổi hình nền từ URL",()->showWallpaperUrlDialog());
         addInfoToggle(controls,"📍  Vị trí & thời tiết","show_weather",true,()->{applyInfoVisibility();if(isInfoEnabled("show_weather",true))refreshWeatherIfNeeded(true);});
         addInfoToggle(controls,"🎉  Ngày lễ","show_holidays",true,()->{lastHolidayDateKey="";updateHolidayDisplay(new Date(),TimeZone.getTimeZone("Asia/Bangkok"));});
@@ -386,7 +393,12 @@ public class MainActivity extends Activity {
     private void applyWallpaper(){if(wallpaper==null)return;wallpaper.setImageResource(R.drawable.default_wallpaper);String saved=getSharedPreferences(PREF,0).getString("wallpaper_uri",null);if(saved!=null){try{wallpaper.setImageURI(Uri.parse(saved));if(wallpaper.getDrawable()!=null)return;}catch(Exception ignored){}}final int request=++wallpaperLoadToken;File downloaded=new File(new File(getFilesDir(),"wallpaper"),"launcher-wallpaper.img");boolean useDownloaded=getSharedPreferences(PREF,0).getBoolean("wallpaper_downloaded",false)&&downloaded.exists();wallpaperExecutor.execute(()->{Bitmap bitmap=useDownloaded?decodeWallpaper(downloaded):decodeDefaultWallpaper();runOnUiThread(()->{if(!isFinishing()&&!isDestroyed()&&wallpaper!=null&&bitmap!=null&&request==wallpaperLoadToken)wallpaper.setImageBitmap(bitmap);});});}
     private Bitmap decodeDefaultWallpaper(){try{BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;BitmapFactory.decodeResource(getResources(),R.drawable.vietnampt,bounds);int targetW=Math.max(1,getResources().getDisplayMetrics().widthPixels),targetH=Math.max(1,getResources().getDisplayMetrics().heightPixels),sample=1;while(bounds.outWidth/sample>targetW||bounds.outHeight/sample>targetH)sample*=2;BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=sample;return BitmapFactory.decodeResource(getResources(),R.drawable.vietnampt,options);}catch(Exception ignored){return null;}}
     private void systemSettings(){try{startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));}catch(Exception e){toast("Không mở được cài đặt TV");}}
-    private void openWifi(){try{startActivity(new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS));}catch(Exception e){systemSettings();}}
+    private void openWifi(){
+        if(Build.VERSION.SDK_INT>=29){
+            try{startActivity(new Intent(android.provider.Settings.Panel.ACTION_WIFI));return;}catch(Exception ignored){}
+        }
+        try{startActivity(new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS));}catch(Exception e){systemSettings();}
+    }
     private void openInputs(){
         refreshInputStatus();
         ArrayList<TvInputInfo> inputs=new ArrayList<>();try{TvInputManager manager=(TvInputManager)getSystemService(TV_INPUT_SERVICE);if(manager!=null)for(TvInputInfo info:manager.getTvInputList())if(info.isPassthroughInput())inputs.add(info);}catch(Exception ignored){}
@@ -432,8 +444,9 @@ public class MainActivity extends Activity {
     private int withAlpha(int rgb,int alpha){return Color.argb(Math.max(0,Math.min(255,alpha)),Color.red(rgb),Color.green(rgb),Color.blue(rgb));}
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}private void toastCentered(String s){Dialog notice=new Dialog(this);LinearLayout panel=menuPanel();TextView message=text(s,16,LIGHT,false);message.setGravity(Gravity.CENTER);message.setPadding(dp(12),dp(10),dp(12),dp(10));panel.addView(message,new LinearLayout.LayoutParams(-1,-2));notice.setCancelable(true);notice.setCanceledOnTouchOutside(false);notice.setContentView(panel);configureDialog(notice,dp(520));notice.show();configureDialog(notice,dp(520));Window window=notice.getWindow();if(window!=null)window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);handler.postDelayed(()->{if(notice.isShowing())notice.dismiss();},2800);}
     @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus&&startupDockFocusPending)handler.postDelayed(this::focusStartupDock,80);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent==null)return;boolean homeIntent=Intent.ACTION_MAIN.equals(intent.getAction())&&intent.hasCategory(Intent.CATEGORY_HOME);if(homeIntent||allAppsDialog!=null&&allAppsDialog.isShowing()){if(allAppsDialog!=null&&allAppsDialog.isShowing())allAppsDialog.dismiss();if(!shown.isEmpty())handler.postDelayed(()->focusTile(0),100);}}
     @Override protected void onResume(){super.onResume();activityResumed=true;if(pendingDrawerRefresh&&allAppsDialog!=null&&allAppsDialog.isShowing()){allAppsDialog.dismiss();pendingDrawerRefresh=false;showAllApps();}if(network!=null)refreshNetwork();if(inputButton!=null)refreshInputStatus();refreshWeatherIfNeeded(false);if(ticker!=null){handler.removeCallbacks(ticker);handler.post(ticker);}setStatsTickerEnabled(isInfoEnabled("show_device_stats",true));}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==73){boolean customized=getSharedPreferences(PREF,0).getBoolean("dock_customized",false);loadApps();saveDockState(customized);renderDock();if(!shown.isEmpty())tiles.post(()->focusTile(0));}}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==73){boolean customized=getSharedPreferences(PREF,0).getBoolean("dock_customized",false);loadApps();saveDockState(customized);renderDock();if(!shown.isEmpty())tiles.post(()->focusTile(0));}else if(requestCode==74){toast(resultCode==RESULT_OK?"Đã đặt Army Launcher làm màn hình chính":"Chưa thay đổi màn hình chính mặc định");}}
     @Override protected void onPause(){activityResumed=false;if(ticker!=null)handler.removeCallbacks(ticker);if(statsTicker!=null)handler.removeCallbacks(statsTicker);super.onPause();}
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==41){refreshNetwork();if(grantResults.length==0||grantResults[0]!=PackageManager.PERMISSION_GRANTED)toast("Để hiện tên Wi‑Fi, cần cấp quyền vị trí cho ứng dụng");}}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);try{unregisterReceiver(packageReceiver);}catch(IllegalArgumentException ignored){}weatherExecutor.shutdownNow();wallpaperExecutor.shutdownNow();super.onDestroy();}
